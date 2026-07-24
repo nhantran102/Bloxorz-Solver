@@ -24,7 +24,8 @@ class BloxorzApp:
         self.levels = [
             "levels/level0.json", "levels/level1.json", "levels/level2.json", "levels/level3.json",
             "levels/level4.json", "levels/level5.json", "levels/level6.json", "levels/level7.json",
-            "levels/level8.json", "levels/level9.json", "levels/level10.json", "levels/level11.json", "levels/level12.json"
+            "levels/level8.json", "levels/level9.json", "levels/level10.json", "levels/level11.json", "levels/level12.json",
+            "levels/level13.json"
         ]
         self.level_index = 0
         self.game = None
@@ -64,6 +65,13 @@ class BloxorzApp:
         tk.Button(self.sidebar, text="Prev Level (back) ", command=self.prev_level, bg="#2c2c2c", fg="white", relief="flat").pack(fill="x", padx=15, pady=3)
         tk.Button(self.sidebar, text="Next Level (Enter)", command=self.next_level, bg="#2c2c2c", fg="white", relief="flat").pack(fill="x", padx=15, pady=3)
 
+        # --- TÁCH KHỐI ---
+        tk.Label(self.sidebar, text="Tách khối", bg="#1a1a1a", fg="#a0a0a0", font=("Segoe UI", 10)).pack(pady=(20, 5))
+        tk.Button(self.sidebar, text="Tách / Hợp nhất (Space)", command=self.on_split_key, bg="#c0392b", fg="white", relief="flat").pack(fill="x", padx=15, pady=3)
+        tk.Button(self.sidebar, text="Đổi khối (Tab)", command=self.on_toggle_key, bg="#7f8c8d", fg="white", relief="flat").pack(fill="x", padx=15, pady=3)
+        tk.Label(self.sidebar, text="Nằm ngang/dọc rồi Space để tách.\nTab đổi khối, Space để hợp nhất\nkhi 2 khối kề nhau.",
+                 bg="#1a1a1a", fg="#7a7a7a", font=("Segoe UI", 8), justify="left").pack(pady=(2, 5), padx=15)
+
         tk.Label(self.sidebar, text="AI Solvers", bg="#1a1a1a", fg="#a0a0a0", font=("Segoe UI", 10)).pack(pady=(20, 5))
 
         # AI Algorithm selection buttons
@@ -81,6 +89,9 @@ class BloxorzApp:
         self.root.bind("<r>", lambda e: self.reset_level())
         self.root.bind("<Return>", lambda e: self.next_level())
         self.root.bind("<BackSpace>", lambda e: self.prev_level())
+        # Tách khối: Space = tách / hợp nhất, Tab = đổi khối con đang điều khiển
+        self.root.bind("<space>", lambda e: self.on_split_key())
+        self.root.bind("<Tab>", lambda e: self.on_toggle_key())
 
     def _load_level(self, index):
         # Clear canvas
@@ -156,20 +167,60 @@ class BloxorzApp:
     def next_level(self): self._load_level(self.level_index + 1)
     def prev_level(self): self._load_level(self.level_index - 1)
 
+    def on_split_key(self):
+        # Space: tách khối (khi đang là 1 khối nằm) hoặc hợp nhất (khi 2 khối con kề nhau)
+        if not self.game or self.failed or self.game.check_win(): return
+        if self.game.is_split():
+            if self.game.try_rejoin():
+                self.moves += 1
+                self.status_label.config(text="Đã hợp nhất khối", fg="#f1c40f")
+                if self.game.check_win():
+                    self.status_label.config(text="YOU WIN!", fg="#2ecc71")
+            else:
+                self.status_label.config(text="2 khối chưa kề nhau!", fg="#e67e22")
+        else:
+            if self.game.do_split():
+                self.status_label.config(text="Đã tách khối — Tab để đổi khối", fg="#3498db")
+            else:
+                self.status_label.config(text="Chỉ tách khi khối đang NẰM", fg="#e67e22")
+        self._update_labels()
+        self._redraw()
+
+    def on_toggle_key(self):
+        # Tab: đổi khối con đang điều khiển (khi đã tách)
+        if self.game and self.game.is_split() and not self.failed and not self.game.check_win():
+            self.game.toggle_active()
+            self._redraw()
+        return "break"  # chặn Tab chuyển focus giữa các widget
+
     def move(self, direction, is_ai=False):
         # Ignore moves if game is already won or lost
-        if not self.game or self.game.check_win() or self.failed: return 
-        
-        # Attempt to update game state; if return is False, the player failed/fell
-        if not self.game.update_move(direction):
-            self.failed = True 
+        if not self.game or self.game.check_win() or self.failed: return
+
+        # Chế độ đã tách: điều khiển khối con đang active
+        if self.game.is_split():
+            result = self.game.move_split(direction)
+            if result == "fell":
+                self.failed = True
+                self._redraw()
+                return
+            if result == "blocked":
+                return  # bị chặn, không tính là một nước đi, không thua
+            self.moves += 1
+            self._update_labels()
             self._redraw()
             return
-            
+
+        # Attempt to update game state; if return is False, the player failed/fell
+        if not self.game.update_move(direction):
+            self.failed = True
+            self._redraw()
+            return
+
         self.moves += 1
-        if self.game.check_win(): 
+        if self.game.check_win():
             self.status_label.config(text="YOU WIN!", fg="#2ecc71")
-        
+
         self._update_labels()
         self._redraw()
 
@@ -212,11 +263,20 @@ class BloxorzApp:
             color = "#6bb7ff" if switch["type"] == "soft" else "#365a9c"
             self.canvas.create_oval(x1+8, y1+8, x2-8, y2-8, fill=color, outline="", tags="dynamic")
 
-        # Draw the block
-        for r, c in self.game.block.get_occupied_cells():
-            x1, y1 = self.offset_x + c * self.cell_size, self.offset_y + r * self.cell_size
-            x2, y2 = x1 + self.cell_size, y1 + self.cell_size
-            self.canvas.create_rectangle(x1+3, y1+3, x2-3, y2-3, fill="#d63031", outline="#000000", width=2, tags="dynamic")
+        # Draw the block (đã tách -> vẽ 2 khối con, khối đang điều khiển được tô sáng + viền vàng)
+        if self.game.is_split():
+            for i, (r, c) in enumerate(self.game.split_cells):
+                x1, y1 = self.offset_x + c * self.cell_size, self.offset_y + r * self.cell_size
+                x2, y2 = x1 + self.cell_size, y1 + self.cell_size
+                fill = "#ff6b6b" if i == self.game.active else "#8e2b2b"
+                self.canvas.create_rectangle(x1+6, y1+6, x2-6, y2-6, fill=fill, outline="#000000", width=2, tags="dynamic")
+                if i == self.game.active:
+                    self.canvas.create_rectangle(x1+3, y1+3, x2-3, y2-3, outline="#f1c40f", width=3, tags="dynamic")
+        else:
+            for r, c in self.game.block.get_occupied_cells():
+                x1, y1 = self.offset_x + c * self.cell_size, self.offset_y + r * self.cell_size
+                x2, y2 = x1 + self.cell_size, y1 + self.cell_size
+                self.canvas.create_rectangle(x1+3, y1+3, x2-3, y2-3, fill="#d63031", outline="#000000", width=2, tags="dynamic")
 
         # Draw bridges based on their current state
         for r in range(self.game.rows):

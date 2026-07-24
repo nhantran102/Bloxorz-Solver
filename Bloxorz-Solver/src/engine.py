@@ -59,7 +59,13 @@ class GameState:
         # Lưu trạng thái các cây cầu dưới dạng dict để dễ thay đổi: { "bridge_id": True/False (đóng/mở) }
         self.bridges_state = map_data.get("initial_bridges", {}) 
         # Lưu thông tin thiết kế của công tắc từ JSON
-        self.switches = map_data.get("switches", []) 
+        self.switches = map_data.get("switches", [])
+
+        # --- TÁCH KHỐI (SPLIT) ---
+        # split_cells = None  -> đang là 1 khối 1x2 bình thường (dùng self.block)
+        # split_cells = [[r,c],[r,c]] -> đã tách thành 2 khối con 1x1
+        self.split_cells = None
+        self.active = 0  # chỉ số khối con (0/1) đang được điều khiển
 
     def is_valid_move(self, next_block):
         occupied = next_block.get_occupied_cells()
@@ -87,25 +93,98 @@ class GameState:
                 
         return True
 
-    def _check_and_trigger_switches(self):
-        """Hàm nội bộ kiểm tra xem vị trí hiện tại của Block có kích hoạt công tắc nào không"""
-        occupied = self.block.get_occupied_cells()
-        
+    def _trigger_switch_at(self, r, c, is_heavy_press):
+        """Kích hoạt công tắc (nếu có) tại ô (r, c).
+        is_heavy_press: khối hiện tại có đủ 'nặng' để đạp công tắc loại heavy không
+        (chỉ khối 1x2 đứng thẳng mới nặng; khối nằm hoặc khối con 1x1 thì không)."""
         for switch in self.switches:
             sr, sc = switch["pos"]
-            if (sr, sc) in occupied:
-                # Kiểm tra loại công tắc
-                if switch["type"] == "heavy" and self.block.orientation != "standing":
-                    continue # Công tắc nặng chỉ kích hoạt khi đứng thẳng
-                
-                # Thực hiện đổi trạng thái của Cầu liên kết (Toggle hoặc Permanent)
+            if (sr, sc) == (r, c):
+                # Công tắc nặng chỉ kích hoạt bởi lực đè tập trung (đứng thẳng)
+                if switch["type"] == "heavy" and not is_heavy_press:
+                    continue
                 for target_bridge in switch["target_bridges"]:
                     if switch["action"] == "toggle":
                         self.bridges_state[target_bridge] = not self.bridges_state.get(target_bridge, False)
                     elif switch["action"] == "open":
                         self.bridges_state[target_bridge] = True
 
+    def _check_and_trigger_switches(self):
+        """Hàm nội bộ kiểm tra xem vị trí hiện tại của Block có kích hoạt công tắc nào không"""
+        standing = self.block.orientation == "standing"
+        for r, c in self.block.get_occupied_cells():
+            self._trigger_switch_at(r, c, is_heavy_press=standing)
+
+    # ==========================================
+    #  TÁCH KHỐI (SPLIT) — cơ chế 2 khối con 1x1
+    # ==========================================
+    def is_split(self):
+        return self.split_cells is not None
+
+    def do_split(self):
+        """Tách khối 1x2 (đang NẰM) thành 2 khối con 1x1.
+        Trả về True nếu tách thành công."""
+        if self.is_split():
+            return False
+        # Chỉ tách được khi khối đang nằm ngang/dọc (chiếm đúng 2 ô)
+        if self.block.orientation == "standing":
+            return False
+        (r1, c1), (r2, c2) = self.block.get_occupied_cells()
+        self.split_cells = [[r1, c1], [r2, c2]]
+        self.active = 0
+        return True
+
+    def toggle_active(self):
+        """Đổi khối con đang điều khiển (khi đã tách)."""
+        if self.is_split():
+            self.active = 1 - self.active
+
+    def try_rejoin(self):
+        """Nếu 2 khối con đang kề nhau -> hợp nhất lại thành 1 khối 1x2 nằm.
+        Trả về True nếu hợp nhất thành công."""
+        if not self.is_split():
+            return False
+        (r1, c1), (r2, c2) = self.split_cells
+        if r1 == r2 and abs(c1 - c2) == 1:
+            self.block = Block(r1, min(c1, c2), "horizontal")
+        elif c1 == c2 and abs(r1 - r2) == 1:
+            self.block = Block(min(r1, r2), c1, "vertical")
+        else:
+            return False  # hai khối chưa kề nhau
+        self.split_cells = None
+        self.active = 0
+        return True
+
+    def move_split(self, direction):
+        """Di chuyển khối con đang active 1 ô.
+        Trả về: 'ok' (đã đi), 'blocked' (bị chặn, không đổi), 'fell' (rơi khỏi map -> thua)."""
+        deltas = {"UP": (-1, 0), "DOWN": (1, 0), "LEFT": (0, -1), "RIGHT": (0, 1)}
+        dr, dc = deltas[direction.upper()]
+        ar, ac = self.split_cells[self.active]
+        nr, nc = ar + dr, ac + dc
+        other = self.split_cells[1 - self.active]
+
+        # Ra ngoài bản đồ hoặc rơi vào ô trống (Void) -> rơi
+        if not (0 <= nr < self.rows and 0 <= nc < self.cols) or self.grid[nr][nc] == " ":
+            return "fell"
+
+        cell = self.grid[nr][nc]
+        # Cầu đang đóng -> coi như tường, bị chặn
+        if cell.startswith("B_") and not self.bridges_state.get(cell, False):
+            return "blocked"
+        # Không được chồng lên khối con kia
+        if [nr, nc] == other:
+            return "blocked"
+
+        self.split_cells[self.active] = [nr, nc]
+        # Khối con 1x1 KHÔNG đủ nặng cho công tắc heavy
+        self._trigger_switch_at(nr, nc, is_heavy_press=False)
+        return "ok"
+
     def check_win(self):
+        # Đang tách thì chưa thể thắng — phải hợp nhất và đứng trên đích
+        if self.is_split():
+            return False
         if self.block.orientation == "standing":
             r, c = self.block.r, self.block.c
             if self.grid[r][c] == "G":
