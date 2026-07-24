@@ -12,10 +12,13 @@ def get_signature(state):
     Bao gồm tọa độ Block, hướng xoay, và trạng thái các cây cầu.
     """
     return (
-        state.block.r, 
-        state.block.c, 
-        state.block.orientation, 
-        frozenset(state.bridges_state.items())
+        state.block.r,
+        state.block.c,
+        state.block.orientation,
+        frozenset(state.bridges_state.items()),
+        # Trạng thái tách khối (nếu có) để tránh nhầm lẫn state khi map có ô nút tách
+        None if state.split_cells is None else tuple(map(tuple, state.split_cells)),
+        state.active,
     )
 
 def clone_state(state):
@@ -26,6 +29,7 @@ def clone_state(state):
     new_state = copy.copy(state)
     new_state.block = copy.copy(state.block)
     new_state.bridges_state = state.bridges_state.copy()
+    new_state.split_cells = None if state.split_cells is None else [list(p) for p in state.split_cells]
     return new_state
 
 def find_goal(state):

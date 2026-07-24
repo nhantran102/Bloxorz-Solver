@@ -9,6 +9,7 @@ import tracemalloc
 # Define color palette for the game grid and elements
 COLORS = {
     " ": "#151515", "O": "#d0d0d0", "F": "#ff9933", "G": "#33cc66",
+    "P": "#9b59b6",  # ô nút tách khối (split pad)
 }
 
 class BloxorzApp:
@@ -67,9 +68,9 @@ class BloxorzApp:
 
         # --- TÁCH KHỐI ---
         tk.Label(self.sidebar, text="Tách khối", bg="#1a1a1a", fg="#a0a0a0", font=("Segoe UI", 10)).pack(pady=(20, 5))
-        tk.Button(self.sidebar, text="Tách / Hợp nhất (Space)", command=self.on_split_key, bg="#c0392b", fg="white", relief="flat").pack(fill="x", padx=15, pady=3)
+        tk.Button(self.sidebar, text="Hợp nhất (Space)", command=self.on_split_key, bg="#c0392b", fg="white", relief="flat").pack(fill="x", padx=15, pady=3)
         tk.Button(self.sidebar, text="Đổi khối (Tab)", command=self.on_toggle_key, bg="#7f8c8d", fg="white", relief="flat").pack(fill="x", padx=15, pady=3)
-        tk.Label(self.sidebar, text="Nằm ngang/dọc rồi Space để tách.\nTab đổi khối, Space để hợp nhất\nkhi 2 khối kề nhau.",
+        tk.Label(self.sidebar, text="Đứng khối lên ô nút TÍM để tách:\n1 khối ở nút, 1 khối ở vị trí start.\nTab đổi khối, Space hợp nhất khi\n2 khối kề nhau.",
                  bg="#1a1a1a", fg="#7a7a7a", font=("Segoe UI", 8), justify="left").pack(pady=(2, 5), padx=15)
 
         tk.Label(self.sidebar, text="AI Solvers", bg="#1a1a1a", fg="#a0a0a0", font=("Segoe UI", 10)).pack(pady=(20, 5))
@@ -168,21 +169,18 @@ class BloxorzApp:
     def prev_level(self): self._load_level(self.level_index - 1)
 
     def on_split_key(self):
-        # Space: tách khối (khi đang là 1 khối nằm) hoặc hợp nhất (khi 2 khối con kề nhau)
+        # Space: hợp nhất 2 khối con khi chúng kề nhau (việc tách do ô nút P trên bản đồ lo)
         if not self.game or self.failed or self.game.check_win(): return
-        if self.game.is_split():
-            if self.game.try_rejoin():
-                self.moves += 1
-                self.status_label.config(text="Đã hợp nhất khối", fg="#f1c40f")
-                if self.game.check_win():
-                    self.status_label.config(text="YOU WIN!", fg="#2ecc71")
-            else:
-                self.status_label.config(text="2 khối chưa kề nhau!", fg="#e67e22")
+        if not self.game.is_split():
+            self.status_label.config(text="Đứng khối lên ô nút TÍM để tách", fg="#e67e22")
+            return
+        if self.game.try_rejoin():
+            self.moves += 1
+            self.status_label.config(text="Đã hợp nhất khối", fg="#f1c40f")
+            if self.game.check_win():
+                self.status_label.config(text="YOU WIN!", fg="#2ecc71")
         else:
-            if self.game.do_split():
-                self.status_label.config(text="Đã tách khối — Tab để đổi khối", fg="#3498db")
-            else:
-                self.status_label.config(text="Chỉ tách khi khối đang NẰM", fg="#e67e22")
+            self.status_label.config(text="2 khối chưa kề nhau!", fg="#e67e22")
         self._update_labels()
         self._redraw()
 
@@ -251,6 +249,7 @@ class BloxorzApp:
                         # Draw Goal (G) or Finish (F) labels
                         if cell == "G": self.canvas.create_text((x1+x2)/2, (y1+y2)/2, text="T", font=("Segoe UI", 16, "bold"), fill="#0b3d1f", tags="tile")
                         elif cell == "F": self.canvas.create_text((x1+x2)/2, (y1+y2)/2, text="O", font=("Segoe UI", 14, "bold"), fill="#6b3e00", tags="tile")
+                        elif cell == "P": self.canvas.create_text((x1+x2)/2, (y1+y2)/2, text="⊟", font=("Segoe UI", 18, "bold"), fill="#f5eefc", tags="tile")
 
         # 2. Dynamic content: Clear only movable/changable objects (switches, block, bridges)
         self.canvas.delete("dynamic")

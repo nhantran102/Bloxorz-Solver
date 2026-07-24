@@ -53,6 +53,7 @@ class GameState:
         self.cols = len(self.grid[0]) if self.rows > 0 else 0
         
         start_r, start_c = map_data["start_pos"]
+        self.start_r, self.start_c = start_r, start_c  # nhớ vị trí start để tách khối
         self.block = Block(start_r, start_c, "standing")
         
         # --- CHUẨN BỊ CHO TÍNH NĂNG NÂNG CAO ---
@@ -121,18 +122,15 @@ class GameState:
     def is_split(self):
         return self.split_cells is not None
 
-    def do_split(self):
-        """Tách khối 1x2 (đang NẰM) thành 2 khối con 1x1.
-        Trả về True nếu tách thành công."""
-        if self.is_split():
-            return False
-        # Chỉ tách được khi khối đang nằm ngang/dọc (chiếm đúng 2 ô)
-        if self.block.orientation == "standing":
-            return False
-        (r1, c1), (r2, c2) = self.block.get_occupied_cells()
-        self.split_cells = [[r1, c1], [r2, c2]]
+    def _split_from_pad(self, r, c):
+        """Tách khối khi ĐỨNG trên ô nút tách (P):
+        - 1 khối con giữ ở ngay ô nút (r, c)
+        - 1 khối con xuất hiện ở vị trí start của màn"""
+        sr, sc = self.start_r, self.start_c
+        if (r, c) == (sr, sc):
+            return  # nút trùng vị trí start -> bỏ qua để tránh 2 khối chồng nhau
+        self.split_cells = [[r, c], [sr, sc]]
         self.active = 0
-        return True
 
     def toggle_active(self):
         """Đổi khối con đang điều khiển (khi đã tách)."""
@@ -197,7 +195,13 @@ class GameState:
             self.block = next_block
             # Kích hoạt công tắc sau khi di chuyển hợp lệ thành công
             self._check_and_trigger_switches()
-            
+
+            # Tách khối khi ĐỨNG thẳng trên ô nút tách (P)
+            if not self.is_split() and self.block.orientation == "standing":
+                r, c = self.block.r, self.block.c
+                if self.grid[r][c] == "P":
+                    self._split_from_pad(r, c)
+
             if self.check_win():
                 print("Victory!")
             return True
