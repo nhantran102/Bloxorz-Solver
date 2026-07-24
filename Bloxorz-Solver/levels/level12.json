@@ -1,0 +1,61 @@
+{
+  "start_pos": [3, 8],
+  "grid": [
+    [" ", " ", " ", "O", "O", "O", "O", " ", " ", " ", "O", "B_b", "B_b", "O", " ", " ", " "],
+    [" ", " ", " ", " ", " ", " ", "O", " ", " ", " ", "O", " ", " ", " ", " ", " ", " "],
+    [" ", " ", " ", " ", " ", " ", "O", "O", "O", "O", "O", " ", " ", " ", " ", " ", " "],
+    [" ", "O", "B_a", "B_a", "O", "O", "O", "O", "O", "O", "O", "O", "O", "B_c", "B_c", "O", " "],
+    [" ", " ", " ", " ", " ", " ", "O", "O", "O", "O", "O", " ", " ", " ", " ", " ", " "],
+    [" ", " ", " ", " ", " ", " ", "B_d", "O", " ", " ", "O", " ", " ", " ", " ", " ", " "],
+    [" ", " ", " ", " ", " ", " ", "B_d", "O", " ", " ", "O", "O", "O", "O", " ", " ", " "],
+    [" ", "O", "O", "O", " ", " ", "O", "O", " ", " ", "O", " ", " ", " ", " ", " ", " "],
+    [" ", "O", "G", "O", "B_f", "B_f", "O", " ", " ", " ", "O", " ", " ", " ", " ", " ", " "],
+    [" ", "O", "O", "O", "B_e", " ", " ", " ", " ", " ", "O", "O", "O", "O", " ", " ", " "]
+  ],
+  "initial_bridges": {
+    "B_a": false,
+    "B_b": false,
+    "B_c": false,
+    "B_d": false,
+    "B_e": false,
+    "B_f": false
+  },
+  "switches": [
+    {
+      "pos": [0, 3],
+      "type": "soft",
+      "action": "toggle",
+      "target_bridges": ["B_b"]
+    },
+    {
+      "pos": [0, 13],
+      "type": "heavy",
+      "action": "toggle",
+      "target_bridges": ["B_d"]
+    },
+    {
+      "pos": [3, 1],
+      "type": "heavy",
+      "action": "toggle",
+      "target_bridges": ["B_f"]
+    },
+    {
+      "pos": [3, 15],
+      "type": "heavy",
+      "action": "toggle",
+      "target_bridges": ["B_e"]
+    },
+    {
+      "pos": [6, 13],
+      "type": "soft",
+      "action": "toggle",
+      "target_bridges": ["B_a"]
+    },
+    {
+      "pos": [9, 13],
+      "type": "soft",
+      "action": "toggle",
+      "target_bridges": ["B_c"]
+    }
+  ]
+}
